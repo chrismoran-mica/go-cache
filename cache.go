@@ -369,7 +369,7 @@ func (j *janitor[K, T]) Run(c *cache[K, T]) {
 	}
 }
 
-func stopJanitor[K comparable, T any](c *cache[K, T]) {
+func stopJanitor[K comparable, T any](c *Cache[K, T]) {
 	c.janitor.stop <- true
 }
 
@@ -382,7 +382,7 @@ func runJanitor[K comparable, T any](c *cache[K, T], ci time.Duration) {
 	go j.Run(c)
 }
 
-func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *Cache[K, T] {
+func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *cache[K, T] {
 	if de == 0 {
 		de = -1
 	}
@@ -390,21 +390,20 @@ func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *Cache[K, 
 		defaultExpiration: de,
 		items:             m,
 	}
-	return &Cache[K, T]{c}
+	return c
 }
 
 func newCacheWithJanitor[K comparable, T any](de time.Duration, ci time.Duration, m map[K]Item[T]) *Cache[K, T] {
-	//c := newCache[K, T](de, m)
+	c := newCache[K, T](de, m)
 	// This trick ensures that the janitor goroutine (which--granted it
 	// was enabled--is running DeleteExpired on c forever) does not keep
 	// the returned C object from being garbage collected. When it is
 	// garbage collected, the finalizer stops the janitor goroutine, after
 	// which c can be collected.
-	C := newCache[K, T](de, m)
-	c := C.cache
+	C := &Cache[K, T]{c}
 	if ci > 0 {
 		runJanitor(c, ci)
-		runtime.SetFinalizer(C.cache, stopJanitor[K, T])
+		runtime.SetFinalizer(C, stopJanitor[T])
 	}
 	return C
 }
@@ -428,7 +427,7 @@ func New[K comparable, T any](defaultExpiration, cleanupInterval time.Duration) 
 // NewFrom() also accepts an items map which will serve as the underlying map
 // for the cache. This is useful for starting from a deserialized cache
 // (serialized using e.g. gob.Encode() on c.Items()), or passing in e.g.
-// make(map[K,T]Item, 500) to improve startup performance when the cache
+// make(map[K]Item, 500) to improve startup performance when the cache
 // is expected to reach a certain minimum size.
 //
 // Only the cache's methods synchronize access to this map, so it is not
