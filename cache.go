@@ -382,7 +382,7 @@ func runJanitor[K comparable, T any](c *cache[K, T], ci time.Duration) {
 	go j.Run(c)
 }
 
-func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *cache[K, T] {
+func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *Cache[K, T] {
 	if de == 0 {
 		de = -1
 	}
@@ -390,21 +390,21 @@ func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *cache[K, 
 		defaultExpiration: de,
 		items:             m,
 	}
-	return c
+	return &Cache[K, T]{c}
 }
 
 func newCacheWithJanitor[K comparable, T any](de time.Duration, ci time.Duration, m map[K]Item[T]) *Cache[K, T] {
-	c := newCache[K, T](de, m)
+	//c := newCache[K, T](de, m)
 	// This trick ensures that the janitor goroutine (which--granted it
 	// was enabled--is running DeleteExpired on c forever) does not keep
 	// the returned C object from being garbage collected. When it is
 	// garbage collected, the finalizer stops the janitor goroutine, after
 	// which c can be collected.
-	C := &Cache[K, T]{c}
-	C.defaultExpiration = c.defaultExpiration
+	C := newCache[K, T](de, m)
+	c := C.cache
 	if ci > 0 {
 		runJanitor(c, ci)
-		runtime.SetFinalizer(C, stopJanitor[K, T])
+		runtime.SetFinalizer(C.cache, stopJanitor[K, T])
 	}
 	return C
 }
