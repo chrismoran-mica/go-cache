@@ -16,7 +16,7 @@ type Item[T any] struct {
 	Expiration int64
 }
 
-// Returns true if the item has expired.
+// Expired Returns true if the item has expired.
 func (item Item[T]) Expired() bool {
 	if item.Expiration == 0 {
 		return false
@@ -25,9 +25,9 @@ func (item Item[T]) Expired() bool {
 }
 
 const (
-	// For use with functions that take an expiration time.
+	// NoExpiration For use with functions that take an expiration time.
 	NoExpiration time.Duration = -1
-	// For use with functions that take an expiration time. Equivalent to
+	// DefaultExpiration For use with functions that take an expiration time. Equivalent to
 	// passing in the same expiration duration as was given to New() or
 	// NewFrom() when the cache was created (e.g. 5 minutes.)
 	DefaultExpiration time.Duration = 0
@@ -46,7 +46,7 @@ type cache[T any] struct {
 	janitor           *janitor[T]
 }
 
-// Add an item to the cache, replacing any existing item. If the duration is 0
+// Set an item to the cache, replacing any existing item. If the duration is 0
 // (DefaultExpiration), the cache's default expiration time is used. If it is -1
 // (NoExpiration), the item never expires.
 func (c *cache[T]) Set(k string, x T, d time.Duration) {
@@ -82,7 +82,7 @@ func (c *cache[T]) set(k string, x T, d time.Duration) {
 	}
 }
 
-// Add an item to the cache, replacing any existing item, using the default
+// SetDefault an item to the cache, replacing any existing item, using the default
 // expiration.
 func (c *cache[T]) SetDefault(k string, x T) {
 	c.Set(k, x, DefaultExpiration)
@@ -95,21 +95,21 @@ func (c *cache[T]) Add(k string, x T, d time.Duration) error {
 	_, found := c.get(k)
 	if found {
 		c.mu.Unlock()
-		return fmt.Errorf("Item %s already exists", k)
+		return fmt.Errorf("item %s already exists", k)
 	}
 	c.set(k, x, d)
 	c.mu.Unlock()
 	return nil
 }
 
-// Set a new value for the cache key only if it already exists, and the existing
+// Replace a new value for the cache key only if it already exists, and the existing
 // item hasn't expired. Returns an error otherwise.
 func (c *cache[T]) Replace(k string, x T, d time.Duration) error {
 	c.mu.Lock()
 	_, found := c.get(k)
 	if !found {
 		c.mu.Unlock()
-		return fmt.Errorf("Item %s doesn't exist", k)
+		return fmt.Errorf("item %s doesn't exist", k)
 	}
 	c.set(k, x, d)
 	c.mu.Unlock()
@@ -206,7 +206,7 @@ type keyAndValue[T any] struct {
 	value T
 }
 
-// Delete all expired items from the cache.
+// DeleteExpired Deletes all expired items from the cache.
 func (c *cache[T]) DeleteExpired() {
 	var evictedItems []keyAndValue[T]
 	now := time.Now().UnixNano()
@@ -226,7 +226,7 @@ func (c *cache[T]) DeleteExpired() {
 	}
 }
 
-// Sets an (optional) function that is called with the key and value when an
+// OnEvicted sets an (optional) function that is called with the key and value when an
 // item is evicted from the cache. (Including when it is deleted manually, but
 // not when it is overwritten.) Set to nil to disable.
 func (c *cache[T]) OnEvicted(f func(string, T)) {
@@ -235,7 +235,7 @@ func (c *cache[T]) OnEvicted(f func(string, T)) {
 	c.mu.Unlock()
 }
 
-// Write the cache's items (using Gob) to an io.Writer.
+// Save writes the cache's items (using Gob) to an io.Writer.
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
 // documentation for NewFrom().)
@@ -259,7 +259,7 @@ func (c *cache[T]) Save(w io.Writer) (err error) {
 	return err
 }
 
-// Save the cache's items to the given filename, creating the file if it
+// SaveFile saves the cache's items to the given filename, creating the file if it
 // doesn't exist, and overwriting it if it does.
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
@@ -271,13 +271,13 @@ func (c *cache[T]) SaveFile(fname string) error {
 	}
 	err = c.Save(fp)
 	if err != nil {
-		fp.Close()
+		_ = fp.Close()
 		return err
 	}
 	return fp.Close()
 }
 
-// Add (Gob-serialized) cache items from an io.Reader, excluding any items with
+// Load adds (Gob-serialized) cache items from an io.Reader, excluding any items with
 // keys that already exist (and haven't expired) in the current cache.
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
@@ -299,7 +299,7 @@ func (c *cache[T]) Load(r io.Reader) error {
 	return err
 }
 
-// Load and add cache items from the given filename, excluding any items with
+// LoadFile loads and add cache items from the given filename, excluding any items with
 // keys that already exist in the current cache.
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
@@ -311,13 +311,13 @@ func (c *cache[T]) LoadFile(fname string) error {
 	}
 	err = c.Load(fp)
 	if err != nil {
-		fp.Close()
+		_ = fp.Close()
 		return err
 	}
 	return fp.Close()
 }
 
-// Copies all unexpired items in the cache into a new map and returns it.
+// Items copies all unexpired items in the cache into a new map and returns it.
 func (c *cache[T]) Items() map[string]Item[T] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -335,7 +335,7 @@ func (c *cache[T]) Items() map[string]Item[T] {
 	return m
 }
 
-// Returns the number of items in the cache. This may include items that have
+// ItemCount returns the number of items in the cache. This may include items that have
 // expired, but have not yet been cleaned up.
 func (c *cache[T]) ItemCount() int {
 	c.mu.RLock()
@@ -344,7 +344,7 @@ func (c *cache[T]) ItemCount() int {
 	return n
 }
 
-// Delete all items from the cache.
+// Flush deletes all items from the cache.
 func (c *cache[T]) Flush() {
 	c.mu.Lock()
 	c.items = map[string]Item[T]{}
@@ -408,7 +408,7 @@ func newCacheWithJanitor[T any](de time.Duration, ci time.Duration, m map[string
 	return C
 }
 
-// Return a new cache with a given default expiration duration and cleanup
+// New returns a new cache with a given default expiration duration and cleanup
 // interval. If the expiration duration is less than one (or NoExpiration),
 // the items in the cache never expire (by default), and must be deleted
 // manually. If the cleanup interval is less than one, expired items are not
@@ -418,7 +418,7 @@ func New[T any](defaultExpiration, cleanupInterval time.Duration) *Cache[T] {
 	return newCacheWithJanitor[T](defaultExpiration, cleanupInterval, items)
 }
 
-// Return a new cache with a given default expiration duration and cleanup
+// NewFrom returns a new cache with a given default expiration duration and cleanup
 // interval. If the expiration duration is less than one (or NoExpiration),
 // the items in the cache never expire (by default), and must be deleted
 // manually. If the cleanup interval is less than one, expired items are not
