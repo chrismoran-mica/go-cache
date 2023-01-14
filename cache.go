@@ -393,14 +393,14 @@ func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *cache[K, 
 	return c
 }
 
-func newCacheWithJanitor[K comparable, T any](de time.Duration, ci time.Duration, m map[K]Item[T]) *cache[K, T] {
+func newCacheWithJanitor[K comparable, T any](de time.Duration, ci time.Duration, m map[K]Item[T]) *Cache[K, T] {
 	c := newCache[K, T](de, m)
 	// This trick ensures that the janitor goroutine (which--granted it
 	// was enabled--is running DeleteExpired on c forever) does not keep
 	// the returned C object from being garbage collected. When it is
 	// garbage collected, the finalizer stops the janitor goroutine, after
 	// which c can be collected.
-	C := &cache[K, T]{}
+	C := &Cache[K, T]{c}
 	C.defaultExpiration = c.defaultExpiration
 	if ci > 0 {
 		runJanitor(c, ci)
@@ -414,7 +414,7 @@ func newCacheWithJanitor[K comparable, T any](de time.Duration, ci time.Duration
 // the items in the cache never expire (by default), and must be deleted
 // manually. If the cleanup interval is less than one, expired items are not
 // deleted from the cache before calling c.DeleteExpired().
-func New[K comparable, T any](defaultExpiration, cleanupInterval time.Duration) *cache[K, T] {
+func New[K comparable, T any](defaultExpiration, cleanupInterval time.Duration) *Cache[K, T] {
 	items := make(map[K]Item[T])
 	return newCacheWithJanitor[K, T](defaultExpiration, cleanupInterval, items)
 }
@@ -440,6 +440,6 @@ func New[K comparable, T any](defaultExpiration, cleanupInterval time.Duration) 
 // gob.Register() the individual types stored in the cache before encoding a
 // map retrieved with c.Items(), and to register those same types before
 // decoding a blob containing an items map.
-func NewFrom[K comparable, T any](defaultExpiration, cleanupInterval time.Duration, items map[K]Item[T]) *cache[K, T] {
+func NewFrom[K comparable, T any](defaultExpiration, cleanupInterval time.Duration, items map[K]Item[T]) *Cache[K, T] {
 	return newCacheWithJanitor(defaultExpiration, cleanupInterval, items)
 }
