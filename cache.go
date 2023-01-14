@@ -403,7 +403,7 @@ func newCacheWithJanitor[K comparable, T any](de time.Duration, ci time.Duration
 	C := &Cache[K, T]{c}
 	if ci > 0 {
 		runJanitor(c, ci)
-		runtime.SetFinalizer(C, stopJanitor[T])
+		runtime.SetFinalizer(C, stopJanitor[K, T])
 	}
 	return C
 }
