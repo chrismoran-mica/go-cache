@@ -33,23 +33,23 @@ const (
 	DefaultExpiration time.Duration = 0
 )
 
-type Cache[T any] struct {
-	*cache[T]
+type Cache[K comparable, T any] struct {
+	*cache[K, T]
 	// If this is confusing, see the comment at the bottom of New()
 }
 
-type cache[T any] struct {
+type cache[K comparable, T any] struct {
 	defaultExpiration time.Duration
-	items             map[string]Item[T]
+	items             map[K]Item[T]
 	mu                sync.RWMutex
-	onEvicted         func(string, T)
-	janitor           *janitor[T]
+	onEvicted         func(K, T)
+	janitor           *janitor[K, T]
 }
 
 // Set an item to the cache, replacing any existing item. If the duration is 0
 // (DefaultExpiration), the cache's default expiration time is used. If it is -1
 // (NoExpiration), the item never expires.
-func (c *cache[T]) Set(k string, x T, d time.Duration) {
+func (c *cache[K, T]) Set(k K, x T, d time.Duration) {
 	// "Inlining" of set
 	var e int64
 	if d == DefaultExpiration {
@@ -68,7 +68,7 @@ func (c *cache[T]) Set(k string, x T, d time.Duration) {
 	c.mu.Unlock()
 }
 
-func (c *cache[T]) set(k string, x T, d time.Duration) {
+func (c *cache[K, T]) set(k K, x T, d time.Duration) {
 	var e int64
 	if d == DefaultExpiration {
 		d = c.defaultExpiration
@@ -84,13 +84,13 @@ func (c *cache[T]) set(k string, x T, d time.Duration) {
 
 // SetDefault an item to the cache, replacing any existing item, using the default
 // expiration.
-func (c *cache[T]) SetDefault(k string, x T) {
+func (c *cache[K, T]) SetDefault(k K, x T) {
 	c.Set(k, x, DefaultExpiration)
 }
 
 // Add an item to the cache only if an item doesn't already exist for the given
 // key, or if the existing item has expired. Returns an error otherwise.
-func (c *cache[T]) Add(k string, x T, d time.Duration) error {
+func (c *cache[K, T]) Add(k K, x T, d time.Duration) error {
 	c.mu.Lock()
 	_, found := c.get(k)
 	if found {
@@ -104,7 +104,7 @@ func (c *cache[T]) Add(k string, x T, d time.Duration) error {
 
 // Replace a new value for the cache key only if it already exists, and the existing
 // item hasn't expired. Returns an error otherwise.
-func (c *cache[T]) Replace(k string, x T, d time.Duration) error {
+func (c *cache[K, T]) Replace(k K, x T, d time.Duration) error {
 	c.mu.Lock()
 	_, found := c.get(k)
 	if !found {
@@ -118,7 +118,7 @@ func (c *cache[T]) Replace(k string, x T, d time.Duration) error {
 
 // Get an item from the cache. Returns the item or nil, and a bool indicating
 // whether the key was found.
-func (c *cache[T]) Get(k string) (T, bool) {
+func (c *cache[K, T]) Get(k K) (T, bool) {
 	c.mu.RLock()
 	// "Inlining" of get and Expired
 	item, found := c.items[k]
@@ -140,7 +140,7 @@ func (c *cache[T]) Get(k string) (T, bool) {
 // It returns the item or nil, the expiration time if one is set (if the item
 // never expires a zero value for time.Time is returned), and a bool indicating
 // whether the key was found.
-func (c *cache[T]) GetWithExpiration(k string) (T, time.Time, bool) {
+func (c *cache[K, T]) GetWithExpiration(k K) (T, time.Time, bool) {
 	c.mu.RLock()
 	// "Inlining" of get and Expired
 	item, found := c.items[k]
@@ -166,7 +166,7 @@ func (c *cache[T]) GetWithExpiration(k string) (T, time.Time, bool) {
 	return item.Object, time.Time{}, true
 }
 
-func (c *cache[T]) get(k string) (T, bool) {
+func (c *cache[K, T]) get(k K) (T, bool) {
 	item, found := c.items[k]
 	if !found {
 		return *new(T), false
@@ -181,7 +181,7 @@ func (c *cache[T]) get(k string) (T, bool) {
 }
 
 // Delete an item from the cache. Does nothing if the key is not in the cache.
-func (c *cache[T]) Delete(k string) {
+func (c *cache[K, T]) Delete(k K) {
 	c.mu.Lock()
 	v, evicted := c.delete(k)
 	c.mu.Unlock()
@@ -190,7 +190,7 @@ func (c *cache[T]) Delete(k string) {
 	}
 }
 
-func (c *cache[T]) delete(k string) (T, bool) {
+func (c *cache[K, T]) delete(k K) (T, bool) {
 	if c.onEvicted != nil {
 		if v, found := c.items[k]; found {
 			delete(c.items, k)
@@ -201,14 +201,14 @@ func (c *cache[T]) delete(k string) (T, bool) {
 	return *new(T), false
 }
 
-type keyAndValue[T any] struct {
-	key   string
+type keyAndValue[K comparable, T any] struct {
+	key   K
 	value T
 }
 
 // DeleteExpired Deletes all expired items from the cache.
-func (c *cache[T]) DeleteExpired() {
-	var evictedItems []keyAndValue[T]
+func (c *cache[K, T]) DeleteExpired() {
+	var evictedItems []keyAndValue[K, T]
 	now := time.Now().UnixNano()
 	c.mu.Lock()
 	for k, v := range c.items {
@@ -216,7 +216,7 @@ func (c *cache[T]) DeleteExpired() {
 		if v.Expiration > 0 && now > v.Expiration {
 			ov, evicted := c.delete(k)
 			if evicted {
-				evictedItems = append(evictedItems, keyAndValue[T]{k, ov})
+				evictedItems = append(evictedItems, keyAndValue[K, T]{k, ov})
 			}
 		}
 	}
@@ -229,7 +229,7 @@ func (c *cache[T]) DeleteExpired() {
 // OnEvicted sets an (optional) function that is called with the key and value when an
 // item is evicted from the cache. (Including when it is deleted manually, but
 // not when it is overwritten.) Set to nil to disable.
-func (c *cache[T]) OnEvicted(f func(string, T)) {
+func (c *cache[K, T]) OnEvicted(f func(K, T)) {
 	c.mu.Lock()
 	c.onEvicted = f
 	c.mu.Unlock()
@@ -239,7 +239,7 @@ func (c *cache[T]) OnEvicted(f func(string, T)) {
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
 // documentation for NewFrom().)
-func (c *cache[T]) Save(w io.Writer) (err error) {
+func (c *cache[K, T]) Save(w io.Writer) (err error) {
 	enc := gob.NewEncoder(w)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -264,7 +264,7 @@ func (c *cache[T]) Save(w io.Writer) (err error) {
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
 // documentation for NewFrom().)
-func (c *cache[T]) SaveFile(fname string) error {
+func (c *cache[K, T]) SaveFile(fname string) error {
 	fp, err := os.Create(fname)
 	if err != nil {
 		return err
@@ -282,9 +282,9 @@ func (c *cache[T]) SaveFile(fname string) error {
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
 // documentation for NewFrom().)
-func (c *cache[T]) Load(r io.Reader) error {
+func (c *cache[K, T]) Load(r io.Reader) error {
 	dec := gob.NewDecoder(r)
-	items := map[string]Item[T]{}
+	items := map[K]Item[T]{}
 	err := dec.Decode(&items)
 	if err == nil {
 		c.mu.Lock()
@@ -304,7 +304,7 @@ func (c *cache[T]) Load(r io.Reader) error {
 //
 // NOTE: This method is deprecated in favor of c.Items() and NewFrom() (see the
 // documentation for NewFrom().)
-func (c *cache[T]) LoadFile(fname string) error {
+func (c *cache[K, T]) LoadFile(fname string) error {
 	fp, err := os.Open(fname)
 	if err != nil {
 		return err
@@ -318,10 +318,10 @@ func (c *cache[T]) LoadFile(fname string) error {
 }
 
 // Items copies all unexpired items in the cache into a new map and returns it.
-func (c *cache[T]) Items() map[string]Item[T] {
+func (c *cache[K, T]) Items() map[K]Item[T] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	m := make(map[string]Item[T], len(c.items))
+	m := make(map[K]Item[T], len(c.items))
 	now := time.Now().UnixNano()
 	for k, v := range c.items {
 		// "Inlining" of Expired
@@ -337,7 +337,7 @@ func (c *cache[T]) Items() map[string]Item[T] {
 
 // ItemCount returns the number of items in the cache. This may include items that have
 // expired, but have not yet been cleaned up.
-func (c *cache[T]) ItemCount() int {
+func (c *cache[K, T]) ItemCount() int {
 	c.mu.RLock()
 	n := len(c.items)
 	c.mu.RUnlock()
@@ -345,18 +345,18 @@ func (c *cache[T]) ItemCount() int {
 }
 
 // Flush deletes all items from the cache.
-func (c *cache[T]) Flush() {
+func (c *cache[K, T]) Flush() {
 	c.mu.Lock()
-	c.items = map[string]Item[T]{}
+	c.items = map[K]Item[T]{}
 	c.mu.Unlock()
 }
 
-type janitor[T any] struct {
+type janitor[K comparable, T any] struct {
 	Interval time.Duration
 	stop     chan bool
 }
 
-func (j *janitor[T]) Run(c *cache[T]) {
+func (j *janitor[K, T]) Run(c *cache[K, T]) {
 	ticker := time.NewTicker(j.Interval)
 	for {
 		select {
@@ -369,12 +369,12 @@ func (j *janitor[T]) Run(c *cache[T]) {
 	}
 }
 
-func stopJanitor[T any](c *Cache[T]) {
+func stopJanitor[K comparable, T any](c *cache[K, T]) {
 	c.janitor.stop <- true
 }
 
-func runJanitor[T any](c *cache[T], ci time.Duration) {
-	j := &janitor[T]{
+func runJanitor[K comparable, T any](c *cache[K, T], ci time.Duration) {
+	j := &janitor[K, T]{
 		Interval: ci,
 		stop:     make(chan bool),
 	}
@@ -382,28 +382,29 @@ func runJanitor[T any](c *cache[T], ci time.Duration) {
 	go j.Run(c)
 }
 
-func newCache[T any](de time.Duration, m map[string]Item[T]) *cache[T] {
+func newCache[K comparable, T any](de time.Duration, m map[K]Item[T]) *cache[K, T] {
 	if de == 0 {
 		de = -1
 	}
-	c := &cache[T]{
+	c := &cache[K, T]{
 		defaultExpiration: de,
 		items:             m,
 	}
 	return c
 }
 
-func newCacheWithJanitor[T any](de time.Duration, ci time.Duration, m map[string]Item[T]) *Cache[T] {
-	c := newCache[T](de, m)
+func newCacheWithJanitor[K comparable, T any](de time.Duration, ci time.Duration, m map[K]Item[T]) *cache[K, T] {
+	c := newCache[K, T](de, m)
 	// This trick ensures that the janitor goroutine (which--granted it
 	// was enabled--is running DeleteExpired on c forever) does not keep
 	// the returned C object from being garbage collected. When it is
 	// garbage collected, the finalizer stops the janitor goroutine, after
 	// which c can be collected.
-	C := &Cache[T]{c}
+	C := &cache[K, T]{}
+	C.defaultExpiration = c.defaultExpiration
 	if ci > 0 {
 		runJanitor(c, ci)
-		runtime.SetFinalizer(C, stopJanitor[T])
+		runtime.SetFinalizer(C, stopJanitor[K, T])
 	}
 	return C
 }
@@ -413,9 +414,9 @@ func newCacheWithJanitor[T any](de time.Duration, ci time.Duration, m map[string
 // the items in the cache never expire (by default), and must be deleted
 // manually. If the cleanup interval is less than one, expired items are not
 // deleted from the cache before calling c.DeleteExpired().
-func New[T any](defaultExpiration, cleanupInterval time.Duration) *Cache[T] {
-	items := make(map[string]Item[T])
-	return newCacheWithJanitor[T](defaultExpiration, cleanupInterval, items)
+func New[K comparable, T any](defaultExpiration, cleanupInterval time.Duration) *cache[K, T] {
+	items := make(map[K]Item[T])
+	return newCacheWithJanitor[K, T](defaultExpiration, cleanupInterval, items)
 }
 
 // NewFrom returns a new cache with a given default expiration duration and cleanup
@@ -427,7 +428,7 @@ func New[T any](defaultExpiration, cleanupInterval time.Duration) *Cache[T] {
 // NewFrom() also accepts an items map which will serve as the underlying map
 // for the cache. This is useful for starting from a deserialized cache
 // (serialized using e.g. gob.Encode() on c.Items()), or passing in e.g.
-// make(map[string]Item, 500) to improve startup performance when the cache
+// make(map[K,T]Item, 500) to improve startup performance when the cache
 // is expected to reach a certain minimum size.
 //
 // Only the cache's methods synchronize access to this map, so it is not
@@ -439,6 +440,6 @@ func New[T any](defaultExpiration, cleanupInterval time.Duration) *Cache[T] {
 // gob.Register() the individual types stored in the cache before encoding a
 // map retrieved with c.Items(), and to register those same types before
 // decoding a blob containing an items map.
-func NewFrom[T any](defaultExpiration, cleanupInterval time.Duration, items map[string]Item[T]) *Cache[T] {
+func NewFrom[K comparable, T any](defaultExpiration, cleanupInterval time.Duration, items map[K]Item[T]) *cache[K, T] {
 	return newCacheWithJanitor(defaultExpiration, cleanupInterval, items)
 }
