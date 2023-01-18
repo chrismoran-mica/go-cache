@@ -23,7 +23,7 @@ func NewTestStruct(num int) TestStruct {
 }
 
 func TestCache(t *testing.T) {
-	tc := New[TestStruct](DefaultExpiration, 0)
+	tc := New[string, TestStruct](DefaultExpiration, 0)
 
 	a, found := tc.Get("a")
 	if found {
@@ -57,7 +57,7 @@ func TestCache(t *testing.T) {
 func TestCacheTimes(t *testing.T) {
 	var found bool
 
-	tc := New[TestStruct](50*time.Millisecond, 1*time.Millisecond)
+	tc := New[string, TestStruct](50*time.Millisecond, 1*time.Millisecond)
 	tc.Set("a", NewTestStruct(1), DefaultExpiration)
 	tc.Set("b", NewTestStruct(2), NoExpiration)
 	tc.Set("c", NewTestStruct(3), 20*time.Millisecond)
@@ -95,11 +95,11 @@ func TestCacheTimes(t *testing.T) {
 func TestNewFrom(t *testing.T) {
 
 	m := map[string]Item[int]{
-		"a": Item[int]{
+		"a": {
 			Object:     1,
 			Expiration: 0,
 		},
-		"b": Item[int]{
+		"b": {
 			Object:     2,
 			Expiration: 0,
 		},
@@ -122,7 +122,7 @@ func TestNewFrom(t *testing.T) {
 }
 
 func TestStorePointerToStruct(t *testing.T) {
-	tc := New[*TestStruct](DefaultExpiration, 0)
+	tc := New[string, *TestStruct](DefaultExpiration, 0)
 	tc.Set("foo", &TestStruct{Num: 1}, DefaultExpiration)
 	x, found := tc.Get("foo")
 	if !found {
@@ -142,7 +142,7 @@ func TestStorePointerToStruct(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	tc := New[string](DefaultExpiration, 0)
+	tc := New[string, string](DefaultExpiration, 0)
 	err := tc.Add("foo", "bar", DefaultExpiration)
 	if err != nil {
 		t.Error("Couldn't add foo even though it shouldn't exist")
@@ -154,7 +154,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestReplace(t *testing.T) {
-	tc := New[string](DefaultExpiration, 0)
+	tc := New[string, string](DefaultExpiration, 0)
 	err := tc.Replace("foo", "bar", DefaultExpiration)
 	if err == nil {
 		t.Error("Replaced foo when it shouldn't exist")
@@ -167,7 +167,7 @@ func TestReplace(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	tc := New[string](DefaultExpiration, 0)
+	tc := New[string, string](DefaultExpiration, 0)
 	tc.Set("foo", "bar", DefaultExpiration)
 	tc.Delete("foo")
 	_, found := tc.Get("foo")
@@ -177,7 +177,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestItemCount(t *testing.T) {
-	tc := New[string](DefaultExpiration, 0)
+	tc := New[string, string](DefaultExpiration, 0)
 	tc.Set("foo", "1", DefaultExpiration)
 	tc.Set("bar", "2", DefaultExpiration)
 	tc.Set("baz", "3", DefaultExpiration)
@@ -187,7 +187,7 @@ func TestItemCount(t *testing.T) {
 }
 
 func TestFlush(t *testing.T) {
-	tc := New[string](DefaultExpiration, 0)
+	tc := New[string, string](DefaultExpiration, 0)
 	tc.Set("foo", "bar", DefaultExpiration)
 	tc.Set("baz", "yes", DefaultExpiration)
 	tc.Flush()
@@ -203,7 +203,7 @@ func TestFlush(t *testing.T) {
 }
 
 func TestOnEvicted(t *testing.T) {
-	tc := New[int](DefaultExpiration, 0)
+	tc := New[string, int](DefaultExpiration, 0)
 	tc.Set("foo", 3, DefaultExpiration)
 	if tc.onEvicted != nil {
 		t.Fatal("tc.onEvicted is not nil")
@@ -226,7 +226,7 @@ func TestOnEvicted(t *testing.T) {
 }
 
 func TestCacheSerialization(t *testing.T) {
-	tc := New[TestStruct](DefaultExpiration, 0)
+	tc := New[string, TestStruct](DefaultExpiration, 0)
 	testFillAndSerialize(t, tc)
 
 	// Check if gob.Register behaves properly even after multiple gob.Register
@@ -234,23 +234,23 @@ func TestCacheSerialization(t *testing.T) {
 	testFillAndSerialize(t, tc)
 }
 
-func testFillAndSerialize(t *testing.T, tc *Cache[TestStruct]) {
+func testFillAndSerialize(t *testing.T, tc *Cache[string, TestStruct]) {
 
 	tc.Set("*struct", TestStruct{Num: 1}, DefaultExpiration)
 
 	tc.Set("structception", TestStruct{
 		Num: 42,
 		Children: []*TestStruct{
-			&TestStruct{Num: 6174},
-			&TestStruct{Num: 4716},
+			{Num: 6174},
+			{Num: 4716},
 		},
 	}, DefaultExpiration)
 
 	tc.Set("structceptionexpire", TestStruct{
 		Num: 42,
 		Children: []*TestStruct{
-			&TestStruct{Num: 6174},
-			&TestStruct{Num: 4716},
+			{Num: 6174},
+			{Num: 4716},
 		},
 	}, 1*time.Millisecond)
 
@@ -260,7 +260,7 @@ func testFillAndSerialize(t *testing.T, tc *Cache[TestStruct]) {
 		t.Fatal("Couldn't save cache to fp:", err)
 	}
 
-	oc := New[TestStruct](DefaultExpiration, 0)
+	oc := New[string, TestStruct](DefaultExpiration, 0)
 	err = oc.Load(fp)
 	if err != nil {
 		t.Fatal("Couldn't load cache from fp:", err)
@@ -297,19 +297,19 @@ func testFillAndSerialize(t *testing.T, tc *Cache[TestStruct]) {
 }
 
 func TestFileSerialization(t *testing.T) {
-	tc := New[string](DefaultExpiration, 0)
-	tc.Add("a", "a", DefaultExpiration)
-	tc.Add("b", "b", DefaultExpiration)
+	tc := New[string, string](DefaultExpiration, 0)
+	_ = tc.Add("a", "a", DefaultExpiration)
+	_ = tc.Add("b", "b", DefaultExpiration)
 	f, err := ioutil.TempFile("", "go-cache-cache.dat")
 	if err != nil {
 		t.Fatal("Couldn't create cache file:", err)
 	}
 	fname := f.Name()
-	f.Close()
-	tc.SaveFile(fname)
+	_ = f.Close()
+	_ = tc.SaveFile(fname)
 
-	oc := New[string](DefaultExpiration, 0)
-	oc.Add("a", "aa", 0) // this should not be overwritten
+	oc := New[string, string](DefaultExpiration, 0)
+	_ = oc.Add("a", "aa", 0) // this should not be overwritten
 	err = oc.LoadFile(fname)
 	if err != nil {
 		t.Error(err)
@@ -336,7 +336,7 @@ func TestFileSerialization(t *testing.T) {
 }
 
 func TestSerializeUnserializable(t *testing.T) {
-	tc := New[chan bool](DefaultExpiration, 0)
+	tc := New[string, chan bool](DefaultExpiration, 0)
 	ch := make(chan bool, 1)
 	ch <- true
 	tc.Set("chan", ch, DefaultExpiration)
@@ -357,7 +357,7 @@ func BenchmarkCacheGetStringNotExpiring(b *testing.B) {
 
 func benchmarkCacheGetString(b *testing.B, exp time.Duration) {
 	b.StopTimer()
-	tc := New[string](exp, 0)
+	tc := New[string, string](exp, 0)
 	tc.Set("foo", "bar", DefaultExpiration)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -418,7 +418,7 @@ func BenchmarkCacheGetConcurrentNotExpiring(b *testing.B) {
 
 func benchmarkCacheGetConcurrent(b *testing.B, exp time.Duration) {
 	b.StopTimer()
-	tc := New[string](exp, 0)
+	tc := New[string, string](exp, 0)
 	tc.Set("foo", "bar", DefaultExpiration)
 	wg := new(sync.WaitGroup)
 	workers := runtime.NumCPU()
@@ -474,7 +474,7 @@ func benchmarkCacheGetManyConcurrent(b *testing.B, exp time.Duration) {
 	// in sharded_test.go.
 	b.StopTimer()
 	n := 10000
-	tc := New[string](exp, 0)
+	tc := New[string, string](exp, 0)
 	keys := make([]string, n)
 	for i := 0; i < n; i++ {
 		k := "foo" + strconv.Itoa(i)
@@ -506,7 +506,7 @@ func BenchmarkCacheSetStringNotExpiring(b *testing.B) {
 
 func benchmarkCacheSetString(b *testing.B, exp time.Duration) {
 	b.StopTimer()
-	tc := New[string](exp, 0)
+	tc := New[string, string](exp, 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		tc.Set("foo", "bar", DefaultExpiration)
@@ -527,7 +527,7 @@ func BenchmarkRWMutexMapSet(b *testing.B) {
 
 func BenchmarkCacheSetDelete(b *testing.B) {
 	b.StopTimer()
-	tc := New[string](DefaultExpiration, 0)
+	tc := New[string, string](DefaultExpiration, 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		tc.Set("foo", "bar", DefaultExpiration)
@@ -552,7 +552,7 @@ func BenchmarkRWMutexMapSetDelete(b *testing.B) {
 
 func BenchmarkCacheSetDeleteSingleLock(b *testing.B) {
 	b.StopTimer()
-	tc := New[string](DefaultExpiration, 0)
+	tc := New[string, string](DefaultExpiration, 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		tc.mu.Lock()
@@ -577,7 +577,7 @@ func BenchmarkRWMutexMapSetDeleteSingleLock(b *testing.B) {
 
 func BenchmarkDeleteExpiredLoop(b *testing.B) {
 	b.StopTimer()
-	tc := New[string](5*time.Minute, 0)
+	tc := New[string, string](5*time.Minute, 0)
 	tc.mu.Lock()
 	for i := 0; i < 100000; i++ {
 		tc.set(strconv.Itoa(i), "bar", DefaultExpiration)
@@ -590,7 +590,7 @@ func BenchmarkDeleteExpiredLoop(b *testing.B) {
 }
 
 func TestGetWithExpiration(t *testing.T) {
-	tc := New[int](DefaultExpiration, 0)
+	tc := New[string, int](DefaultExpiration, 0)
 
 	a, expiration, found := tc.GetWithExpiration("a")
 	if found || !expiration.IsZero() {
@@ -652,7 +652,7 @@ func BenchmarkCacheGetStructNotExpiring(b *testing.B) {
 
 func benchmarkCacheGetStruct(b *testing.B, exp time.Duration) {
 	b.StopTimer()
-	tc := New[*TestStruct](exp, 0)
+	tc := New[string, *TestStruct](exp, 0)
 
 	tc.Set("foo", &TestStruct{Num: 1}, DefaultExpiration)
 	b.StartTimer()
@@ -673,7 +673,7 @@ func BenchmarkCacheSetStructNotExpiring(b *testing.B) {
 
 func benchmarkCacheSetStruct(b *testing.B, exp time.Duration) {
 	b.StopTimer()
-	tc := New[*TestStruct](exp, 0)
+	tc := New[string, *TestStruct](exp, 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		tc.Set("foo", &TestStruct{Num: 1}, DefaultExpiration)
@@ -682,20 +682,20 @@ func benchmarkCacheSetStruct(b *testing.B, exp time.Duration) {
 
 func BenchmarkCacheSetFatStructExpiring(b *testing.B) {
 	b.StopTimer()
-	tc := New[*TestStruct](NoExpiration, 0)
+	tc := New[string, *TestStruct](NoExpiration, 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		tc.Set("foo", &TestStruct{Num: 1, Children: []*TestStruct{
-			&TestStruct{Num: 2, Children: []*TestStruct{}}}}, DefaultExpiration)
+			{Num: 2, Children: []*TestStruct{}}}}, DefaultExpiration)
 	}
 }
 
 func BenchmarkCacheGetFatStructNotExpiring(b *testing.B) {
 	b.StopTimer()
-	tc := New[*TestStruct](NoExpiration, 0)
+	tc := New[string, *TestStruct](NoExpiration, 0)
 
 	tc.Set("foo", &TestStruct{Num: 1, Children: []*TestStruct{
-		&TestStruct{Num: 2, Children: []*TestStruct{}}}}, DefaultExpiration)
+		{Num: 2, Children: []*TestStruct{}}}}, DefaultExpiration)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		st, _ := tc.Get("foo")

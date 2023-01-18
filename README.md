@@ -1,9 +1,9 @@
 # go-cache
 
-[![test-and-lint](https://github.com/num30/go-cache/actions/workflows/test.yaml/badge.svg)](https://github.com/num30/go-cache/actions/workflows/test.yaml)
+[![test-and-lint](https://github.com/chrismoran-mica/go-cache/actions/workflows/test.yaml/badge.svg)](https://github.com/chrismoran-mica/go-cache/actions/workflows/test.yaml)
 [![codecov](https://codecov.io/gh/num30/go-cache/branch/main/graph/badge.svg?token=FMvJ4TbC2r)](https://codecov.io/gh/num30/go-cache)
-[![Go Report Card](https://goreportcard.com/badge/github.com/num30/go-cache)](https://goreportcard.com/report/github.com/num30/go-cache)
-[![Go Reference](https://pkg.go.dev/badge/github.com/num30/go-cache.svg)](https://pkg.go.dev/github.com/num30/go-cache)
+[![Go Report Card](https://goreportcard.com/badge/github.com/chrismoran-mica/go-cache)](https://goreportcard.com/report/github.com/chrismoran-mica/go-cache)
+[![Go Reference](https://pkg.go.dev/badge/github.com/chrismoran-mica/go-cache.svg)](https://pkg.go.dev/github.com/chrismoran-mica/go-cache)
 
 ℹ️ go-cache is a port of great [go-cache](https://github.com/patrickmn/go-cache) library that was written by @patrickmn. The main defference is that it relies on generics instead of reflection.
 
@@ -22,14 +22,14 @@ one) to recover from downtime quickly. (See the docs for `NewFrom()` for caveats
 
 ### Installation
 
-`go get github.com/num30/go-cache`
+`go get github.com/chrismoran-mica/go-cache`
 
 ### Usage
 
 ```go
 import (
 	"fmt"
-	"github.com/num30/go-cache"
+	"github.com/chrismoran-mica/go-cache"
 	"time"
 )
 

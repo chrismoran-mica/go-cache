@@ -95,7 +95,7 @@ func (c *cache[K, T]) Add(k K, x T, d time.Duration) error {
 	_, found := c.get(k)
 	if found {
 		c.mu.Unlock()
-		return fmt.Errorf("item %s already exists", k)
+		return fmt.Errorf("item %v already exists", k)
 	}
 	c.set(k, x, d)
 	c.mu.Unlock()
@@ -109,7 +109,7 @@ func (c *cache[K, T]) Replace(k K, x T, d time.Duration) error {
 	_, found := c.get(k)
 	if !found {
 		c.mu.Unlock()
-		return fmt.Errorf("item %s doesn't exist", k)
+		return fmt.Errorf("item %v doesn't exist", k)
 	}
 	c.set(k, x, d)
 	c.mu.Unlock()
