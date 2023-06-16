@@ -59,6 +59,19 @@ func (c *cache[K, T]) Set(k K, x T, d time.Duration) {
 		e = time.Now().Add(d).UnixNano()
 	}
 	c.mu.Lock()
+	_, found := c.get(k)
+	if found {
+		v, evicted := c.delete(k)
+		c.items[k] = Item[T]{
+			Object:     x,
+			Expiration: e,
+		}
+		c.mu.Unlock()
+		if evicted {
+			c.onEvicted(k, v)
+		}
+		return
+	}
 	c.items[k] = Item[T]{
 		Object:     x,
 		Expiration: e,

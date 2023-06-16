@@ -2,7 +2,7 @@ package cache
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -208,9 +208,18 @@ func TestOnEvicted(t *testing.T) {
 	if tc.onEvicted != nil {
 		t.Fatal("tc.onEvicted is not nil")
 	}
+	gotEvicted := false
+	tc.OnEvicted(func(s string, i int) {
+		gotEvicted = true
+	})
+	tc.Set("foo", 4, DefaultExpiration)
+	if !gotEvicted {
+		t.Fatal("foo:3 should have been evicted!")
+	}
+	tc.OnEvicted(nil)
 	works := false
 	tc.OnEvicted(func(k string, v int) {
-		if k == "foo" && v == 3 {
+		if k == "foo" && v == 4 {
 			works = true
 		}
 		tc.Set("bar", 4, DefaultExpiration)
@@ -300,7 +309,7 @@ func TestFileSerialization(t *testing.T) {
 	tc := New[string, string](DefaultExpiration, 0)
 	_ = tc.Add("a", "a", DefaultExpiration)
 	_ = tc.Add("b", "b", DefaultExpiration)
-	f, err := ioutil.TempFile("", "go-cache-cache.dat")
+	f, err := os.CreateTemp("", "go-cache-cache.dat")
 	if err != nil {
 		t.Fatal("Couldn't create cache file:", err)
 	}
